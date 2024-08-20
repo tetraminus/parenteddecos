@@ -1,0 +1,120 @@
+
+[manifest]
+version = "1.0.0"
+priority = 0
+dump_lua = true
+
+[[patches]]
+[patches.pattern]
+match_indent = false
+target = "obj/Deco.lua"
+pattern = "function Deco:initialize(params)"
+position = "after"
+payload = '''
+self.parentid = ""
+
+'''
+[[patches]]
+[patches.pattern]
+match_indent = false
+target = "obj/Deco.lua"
+pattern = "function Deco:draw(isOnTop)"
+position = "after"
+payload = '''
+local oldpos = {x = self.x, y = self.y}
+local oldrot = self.r
+
+if self.parentid ~= "" then
+    local parent = self:getParent()
+    if not parent then
+        cs:playbackError("Deco parent not found: " .. self.parentid)
+    end
+
+    local totalRotation = self.r
+    local totalX = self.x
+    local totalY = self.y
+
+
+    while parent do
+        totalRotation = totalRotation + parent.r
+
+        -- offset position in local space
+        local x = totalX
+        local y = totalY
+        local parentRadians = math.rad(parent.r)
+        totalX = x * math.cos(parentRadians) - y * math.sin(parentRadians)
+        totalY = x * math.sin(parentRadians) + y * math.cos(parentRadians)
+
+
+        totalX = totalX + parent.x
+        totalY = totalY + parent.y
+
+        parent = parent:getParent()
+    end
+
+    self.r = totalRotation
+    self.x = totalX
+    self.y = totalY
+
+end
+'''
+
+[[patches]]
+[patches.pattern]
+match_indent = false
+target = "obj/Deco.lua"
+pattern = "prof.pop('Deco draw')"
+position = "after"
+payload = '''
+self.x = oldpos.x
+self.y = oldpos.y
+self.r = oldrot
+'''
+
+[[patches]]
+[patches.pattern]
+match_indent = false
+target = "levelformat/events/deco.lua"
+pattern = "Event.property(event,'string', 'id', 'Unique ID for the deco (if this ID does not exist, a deco will be created)', {default = ''})"
+position = "after"
+payload = '''
+Event.property(event,'string', 'parentid', 'Unique ID for the parent deco (if this ID does not exist, the deco will not have a parent)', {optional = true,default = ''})
+'''
+
+[[patches]]
+[patches.pattern]
+match_indent = false
+target = "levelformat/events/deco.lua"
+pattern = "local otherproperties = {'sprite', 'drawLayer', 'drawOrder', 'recolor', 'outline', 'effectCanvas', 'effectCanvasRaw', 'hide'}"
+position = "after"
+payload = '''
+table.insert(otherproperties, 'parentid')
+'''
+
+
+[[patches]]
+[patches.pattern]
+match_indent = false
+target = "obj/Deco.lua"
+pattern = "function Deco:draw(isOnTop)"
+position = "before"
+payload = '''
+function Deco:getParent()
+    if self.parentid == "" then
+        return nil
+    end
+
+    
+    if self.parentid == "@player" then
+        local player = {}
+        player.x = cs.p.x
+        player.y = cs.p.y
+        player.r = (cs.p.angle)
+        player.getParent = function() return nil end
+        return player
+    end
+
+    return cs.vfx.deco[self.parentid]
+end
+
+'''
