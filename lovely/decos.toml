@@ -12,7 +12,8 @@ pattern = "function Deco:initialize(params)"
 position = "after"
 payload = '''
 self.parentid = ""
-
+self.rotationinfluence = 1
+self.cumulativeAngle = cs.p.angle
 '''
 [[patches]]
 [patches.pattern]
@@ -21,6 +22,7 @@ target = "obj/Deco.lua"
 pattern = "function Deco:draw(isOnTop)"
 position = "after"
 payload = '''
+self.cumulativeAngle = self.cumulativeAngle + cs.p.angleDelta
 local oldpos = {x = self.x, y = self.y}
 local oldrot = self.r
 
@@ -36,12 +38,12 @@ if self.parentid ~= "" then
 
 
     while parent do
-        totalRotation = totalRotation + parent.r
+        totalRotation = totalRotation + parent.r * (self.rotationinfluence and self.rotationinfluence or 1)
 
         -- offset position in local space
         local x = totalX
         local y = totalY
-        local parentRadians = math.rad(parent.r)
+        local parentRadians = math.rad(parent.r * (self.rotationinfluence and self.rotationinfluence or 1))
         totalX = x * math.cos(parentRadians) - y * math.sin(parentRadians)
         totalY = x * math.sin(parentRadians) + y * math.cos(parentRadians)
 
@@ -78,7 +80,11 @@ target = "levelformat/events/deco.lua"
 pattern = "Event.property(event,'string', 'id', 'Unique ID for the deco (if this ID does not exist, a deco will be created)', {default = ''})"
 position = "after"
 payload = '''
+imgui.Separator()
+imgui.Text("Deco Parenting")
 Event.property(event,'string', 'parentid', 'Unique ID for the parent deco (if this ID does not exist, the deco will not have a parent)', {optional = true,default = ''})
+Event.property(event,'decimal', 'rotationinfluence', 'How much the parent rotation influences the child deco', {optional = true,default = 1})
+imgui.Separator()
 '''
 
 [[patches]]
@@ -89,6 +95,8 @@ pattern = "local otherproperties = {'sprite', 'drawLayer', 'drawOrder', 'recolor
 position = "after"
 payload = '''
 table.insert(otherproperties, 'parentid')
+table.insert(easableproperties, 'rotationinfluence')
+
 '''
 
 
@@ -109,7 +117,8 @@ function Deco:getParent()
         local player = {}
         player.x = cs.p.x
         player.y = cs.p.y
-        player.r = (cs.p.angle)
+       
+        player.r = self.cumulativeAngle
         player.getParent = function() return nil end
         return player
     end
